@@ -19,6 +19,12 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 
 #include "highlevel_opt.h"
+#include <cfg.h>
+#include "cfg_builder.h"
+#include "cfg_transform.h"
+
+// #include <iostream>
+// using namespace std;
 
 HighLevelOpt::HighLevelOpt(const Options &options)
   : m_options(options) {
@@ -35,6 +41,25 @@ void HighLevelOpt::optimize(std::shared_ptr<Function> function) {
   m_function = function;
 
   // TODO: perform optimizations on the high-level InstructionSequence
+
+  // cerr << "starting optimization" << endl;
+
+  std::shared_ptr<InstructionSequence> hl_iseq = m_function->get_hl_iseq();
+  auto hl_cfg_builder = ::make_highlevel_cfg_builder(hl_iseq);
+  std::shared_ptr<ControlFlowGraph> hl_cfg = hl_cfg_builder.build();
+
+  // local value numbering and copy propogation
+  LVN lvn(hl_cfg);
+  hl_cfg = lvn.transform_cfg();
+
+  // dead store elimination
+  DeadStoreElimination dse(hl_cfg);
+  hl_cfg = dse.transform_cfg();
+
+  /// DO OPTIMIZATIONS
+
+  hl_iseq = hl_cfg->create_instruction_sequence();
+  m_function->set_hl_iseq(hl_iseq);
 
   // Most optimizations should be implemented as objects belonging to classes
   // which derive from ControlFlowGraphTransform. Each optimization should

@@ -23,6 +23,7 @@
 
 #include <memory>
 #include "cfg.h"
+#include "live_vregs.h"
 
 //! Base class for ControlFlowGraphTransform transformations.
 //! This is the preferred way to implement local optimizations.
@@ -62,6 +63,22 @@ public:
   //! @param orig_bb the original basic block
   //! @return shared pointer to the new basic block InstructionSequence
   virtual std::shared_ptr<InstructionSequence> transform_basic_block(std::shared_ptr<InstructionSequence> orig_bb) = 0;
+};
+
+class LVN : public ControlFlowGraphTransform {
+public:
+  LVN(std::shared_ptr<ControlFlowGraph> cfg);
+  virtual ~LVN();
+  virtual std::shared_ptr<InstructionSequence> transform_basic_block(std::shared_ptr<InstructionSequence> orig_bb) override;
+};
+
+class DeadStoreElimination : public ControlFlowGraphTransform {
+private:
+  LiveVregs m_live_vregs;
+public:
+  DeadStoreElimination(std::shared_ptr<ControlFlowGraph> cfg);
+  ~DeadStoreElimination();
+  virtual std::shared_ptr<InstructionSequence> transform_basic_block(std::shared_ptr<InstructionSequence> orig_bb) override;
 };
 
 #endif // CFG_TRANSFORM_H
