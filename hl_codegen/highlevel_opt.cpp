@@ -42,20 +42,20 @@ void HighLevelOpt::optimize(std::shared_ptr<Function> function) {
 
   // TODO: perform optimizations on the high-level InstructionSequence
 
-  // cerr << "starting optimization" << endl;
-
   std::shared_ptr<InstructionSequence> hl_iseq = m_function->get_hl_iseq();
   auto hl_cfg_builder = ::make_highlevel_cfg_builder(hl_iseq);
   std::shared_ptr<ControlFlowGraph> hl_cfg = hl_cfg_builder.build();
 
-  // local value numbering and copy propogation
-  LVN lvn(hl_cfg);
-  hl_cfg = lvn.transform_cfg();
+  for (int i = 0; i < 2; i++) {
+    // local value numbering and copy propogation
+    LVN lvn(hl_cfg);
+    hl_cfg = lvn.transform_cfg();
 
-  // dead store elimination
-  DeadStoreElimination dse(hl_cfg);
-  hl_cfg = dse.transform_cfg();
-
+    // dead store elimination
+    DeadStoreElimination dse(hl_cfg);
+    hl_cfg = dse.transform_cfg();
+  }
+  
   /// DO OPTIMIZATIONS
 
   hl_iseq = hl_cfg->create_instruction_sequence();

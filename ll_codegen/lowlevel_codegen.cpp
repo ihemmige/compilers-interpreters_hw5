@@ -222,6 +222,22 @@ Operand::Kind select_mreg_kind(int operand_size) {
   }
 }
 
+// based on a MREG suggestion int, provide the MachineReg
+MachineReg determine_mreg_offset(int mreg_num) {
+  switch (mreg_num) {
+    case 12:
+      return MREG_R12;
+    case 13: 
+      return MREG_R13;
+    case 14: 
+      return MREG_R14;
+    case 15: 
+      return MREG_R15;
+    case 16:
+      return MREG_RBX;
+  }
+}
+
 void LowLevelCodeGen::translate_instruction(Instruction *hl_ins, std::shared_ptr<InstructionSequence> ll_iseq) {
   HighLevelOpcode hl_opcode = HighLevelOpcode(hl_ins->get_opcode());
 
@@ -238,6 +254,12 @@ void LowLevelCodeGen::translate_instruction(Instruction *hl_ins, std::shared_ptr
     // save callee-saved registers (if any)
     // TODO: if you allocated callee-saved registers as storage for local variables,
     //       emit pushq instructions to save their original values
+    ll_iseq->append(new Instruction(MINS_PUSHQ, Operand(Operand::MREG64, MREG_RBX)));
+    ll_iseq->append(new Instruction(MINS_PUSHQ, Operand(Operand::MREG64, MREG_R12)));
+    ll_iseq->append(new Instruction(MINS_PUSHQ, Operand(Operand::MREG64, MREG_R13)));
+    ll_iseq->append(new Instruction(MINS_PUSHQ, Operand(Operand::MREG64, MREG_R14)));
+    ll_iseq->append(new Instruction(MINS_PUSHQ, Operand(Operand::MREG64, MREG_R15)));
+    ll_iseq->append(new Instruction(MINS_SUBQ, Operand(Operand::IMM_IVAL, 8), Operand(Operand::MREG64, MREG_RSP)));
 
     return;
   }
@@ -248,6 +270,12 @@ void LowLevelCodeGen::translate_instruction(Instruction *hl_ins, std::shared_ptr
 
     // TODO: if you allocated callee-saved registers as storage for local variables,
     //       emit popq instructions to save their original values
+    ll_iseq->append(new Instruction(MINS_ADDQ, Operand(Operand::IMM_IVAL, 8), Operand(Operand::MREG64, MREG_RSP)));
+    ll_iseq->append(new Instruction(MINS_POPQ, Operand(Operand::MREG64, MREG_R15)));
+    ll_iseq->append(new Instruction(MINS_POPQ, Operand(Operand::MREG64, MREG_R14)));
+    ll_iseq->append(new Instruction(MINS_POPQ, Operand(Operand::MREG64, MREG_R13)));
+    ll_iseq->append(new Instruction(MINS_POPQ, Operand(Operand::MREG64, MREG_R12)));
+    ll_iseq->append(new Instruction(MINS_POPQ, Operand(Operand::MREG64, MREG_RBX)));
 
     if (m_total_memory_storage > 0)
       ll_iseq->append(new Instruction(MINS_ADDQ, Operand(Operand::IMM_IVAL, m_total_memory_storage), Operand(Operand::MREG64, MREG_RSP)));
@@ -287,7 +315,7 @@ void LowLevelCodeGen::translate_instruction(Instruction *hl_ins, std::shared_ptr
 
   if (hl_opcode == HINS_cjmp_t || hl_opcode == HINS_cjmp_f) {
     Operand cond = hl_ins->get_operand(0);
-    Operand ll_cond = cond.get_kind() == Operand::IMM_IVAL ? Operand(Operand::IMM_IVAL, cond.get_imm_ival()) : generate_stack_oper(cond);
+    Operand ll_cond = cond.get_kind() == Operand::IMM_IVAL ? Operand(Operand::IMM_IVAL, cond.get_imm_ival()) : generate_stack_oper(cond, 8);
     ll_iseq->append(new Instruction(MINS_CMPL, Operand(Operand::IMM_IVAL, 0), ll_cond));
     // JNE if true, JE if false
     ll_iseq->append(new Instruction(hl_opcode == HINS_cjmp_t ? MINS_JNE : MINS_JE, hl_ins->get_operand(1))); // jump if, label
@@ -368,9 +396,14 @@ void LowLevelCodeGen::translate_instruction(Instruction *hl_ins, std::shared_ptr
 }
 
 // given a VREG, generate an operand accessing stack memory
-Operand LowLevelCodeGen::generate_stack_oper(Operand oper) {
-  int memory_offset = -m_total_memory_storage + (oper.get_base_reg() - 10) * 8;
-  return Operand(Operand::MREG64_MEM_OFF, MREG_RBP, memory_offset);
+// or an MREG depending on the variable's allocation
+Operand LowLevelCodeGen::generate_stack_oper(Operand oper, int operand_size) {
+  if (oper.get_mreg_suggestion() != -1) {
+    return Operand(select_mreg_kind(operand_size), determine_mreg_offset(oper.get_mreg_suggestion()));
+  } else {
+    int memory_offset = -m_total_memory_storage + (oper.get_base_reg() - 10) * 8;
+    return Operand(Operand::MREG64_MEM_OFF, MREG_RBP, memory_offset);
+  }
 }
 
 // can handle add, sub, mul instructions
@@ -384,18 +417,18 @@ void LowLevelCodeGen::handle_arith(Instruction *hl_ins, std::shared_ptr<Instruct
   if (elem1.get_kind() == Operand::IMM_IVAL) {
     ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size),  Operand(Operand::IMM_IVAL, elem1.get_imm_ival()), Operand(select_mreg_kind(operand_size), MREG_R10)));
   } else {
-    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(elem1), Operand(select_mreg_kind(operand_size), MREG_R10)));
+    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(elem1, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10)));
   }
 
   // carry out arithmetic operation with element 2 and store in temp (R10)
   if (elem2.get_kind() == Operand::IMM_IVAL) {
     ll_iseq->append(new Instruction(HL_TO_LL.at(HighLevelOpcode(hl_ins->get_opcode())),  Operand(Operand::IMM_IVAL, elem2.get_imm_ival()), Operand(select_mreg_kind(operand_size), MREG_R10)));
   } else {
-    ll_iseq->append(new Instruction(HL_TO_LL.at(HighLevelOpcode(hl_ins->get_opcode())), generate_stack_oper(elem2), Operand(select_mreg_kind(operand_size), MREG_R10)));
+    ll_iseq->append(new Instruction(HL_TO_LL.at(HighLevelOpcode(hl_ins->get_opcode())), generate_stack_oper(elem2, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10)));
   }
 
   // move from temp (R10) to final destination
-  ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10), generate_stack_oper(res_dest)));
+  ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10), generate_stack_oper(res_dest, operand_size)));
 }
 
 // handles move instructions
@@ -408,14 +441,14 @@ void LowLevelCodeGen::handle_move(Instruction *hl_ins, std::shared_ptr<Instructi
 
   // modify low-level destination operand based its type
   if (dest.is_memref()) { // move memory address to R11 (temporary)
-    ll_iseq->append(new Instruction(MINS_MOVQ, generate_stack_oper(dest), Operand(select_mreg_kind(8), MREG_R11)));
+    ll_iseq->append(new Instruction(MINS_MOVQ, generate_stack_oper(dest, 8), Operand(select_mreg_kind(8), MREG_R11)));
     ll_dest = Operand(Operand::MREG64_MEM, MREG_R11);
   } else if (dest.get_base_reg() == 0) { // return register
     ll_dest = Operand(select_mreg_kind(operand_size), MREG_RAX);
   } else if (dest.get_base_reg() > 0 && dest.get_base_reg() < 7) { // argument registers
     ll_dest = Operand(Operand(select_mreg_kind(operand_size), FUNC_PARAM_MAPPING.at(dest.get_base_reg())));
   } else { // destination is regular VREG
-    ll_dest = generate_stack_oper(dest);
+    ll_dest = generate_stack_oper(dest, operand_size);
   }
 
   // modify low-level source operand based its type
@@ -424,7 +457,7 @@ void LowLevelCodeGen::handle_move(Instruction *hl_ins, std::shared_ptr<Instructi
   } else if(source.get_kind() == Operand::IMM_LABEL) { // source is label (ex. string constant)
     ll_source = source;
   } else if (source.is_memref()) { // move memory address to R11 (temporary), dereference R11 and store in R10 (temporary)
-    ll_iseq->append(new Instruction(MINS_MOVQ, generate_stack_oper(source), Operand(select_mreg_kind(8), MREG_R11)));
+    ll_iseq->append(new Instruction(MINS_MOVQ, generate_stack_oper(source, operand_size), Operand(select_mreg_kind(8), MREG_R11)));
     ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), Operand(Operand::MREG64_MEM, MREG_R11), Operand(select_mreg_kind(operand_size), MREG_R10)));
     ll_source = Operand(select_mreg_kind(operand_size), MREG_R10);
   } else if (source.get_base_reg() == 0) { // return register
@@ -432,7 +465,7 @@ void LowLevelCodeGen::handle_move(Instruction *hl_ins, std::shared_ptr<Instructi
   } else if (source.get_base_reg() > 0 && source.get_base_reg() < 7) { // argument registers
     ll_source = Operand(Operand(select_mreg_kind(operand_size), FUNC_PARAM_MAPPING.at(source.get_base_reg())));
   } else { // source is regular VREG
-    ll_source = generate_stack_oper(source);
+    ll_source = generate_stack_oper(source, operand_size);
   }
 
   // move source to temp if both are memory references
@@ -450,9 +483,9 @@ void LowLevelCodeGen::handle_comp(Instruction *hl_ins, std::shared_ptr<Instructi
   Operand comp1 = hl_ins->get_operand(1);
   Operand comp2 = hl_ins->get_operand(2);
   Operand comp_res =  hl_ins->get_operand(0);
-  Operand ll_comp1 = comp1.get_kind() == Operand::IMM_IVAL ? Operand(Operand::IMM_IVAL, comp1.get_imm_ival()) : generate_stack_oper(comp1);
-  Operand ll_comp2 = comp2.get_kind() == Operand::IMM_IVAL ? Operand(Operand::IMM_IVAL, comp2.get_imm_ival()) : generate_stack_oper(comp2);
-  Operand ll_comp_res = generate_stack_oper(comp_res);
+  Operand ll_comp1 = comp1.get_kind() == Operand::IMM_IVAL ? Operand(Operand::IMM_IVAL, comp1.get_imm_ival()) : generate_stack_oper(comp1, operand_size);
+  Operand ll_comp2 = comp2.get_kind() == Operand::IMM_IVAL ? Operand(Operand::IMM_IVAL, comp2.get_imm_ival()) : generate_stack_oper(comp2, operand_size);
+  Operand ll_comp_res = generate_stack_oper(comp_res, operand_size);
   LowLevelOpcode comparator = HL_TO_LL.at(HighLevelOpcode(hl_ins->get_opcode()));
 
   // if both values being compared are memory references, move the first to temporary (R10)
@@ -479,7 +512,7 @@ void LowLevelCodeGen::handle_div(Instruction *hl_ins, std::shared_ptr<Instructio
   if (elem1.get_kind() == Operand::IMM_IVAL) {
     ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size),  Operand(Operand::IMM_IVAL, elem1.get_imm_ival()), Operand(select_mreg_kind(operand_size), MREG_RAX)));
   } else {
-    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(elem1), Operand(select_mreg_kind(operand_size), MREG_RAX)));
+    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(elem1, operand_size), Operand(select_mreg_kind(operand_size), MREG_RAX)));
   }
 
   // CDQ instruction
@@ -489,14 +522,14 @@ void LowLevelCodeGen::handle_div(Instruction *hl_ins, std::shared_ptr<Instructio
   if (elem2.get_kind() == Operand::IMM_IVAL) {
     ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size),  Operand(Operand::IMM_IVAL, elem2.get_imm_ival()), Operand(select_mreg_kind(operand_size), MREG_R10)));
   } else {
-    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(elem2), Operand(select_mreg_kind(operand_size), MREG_R10)));
+    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(elem2, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10)));
   }
 
   // carry out IDIV instruction
   ll_iseq->append(new Instruction(select_ll_opcode(MINS_IDIVL, operand_size) - 2, Operand(select_mreg_kind(operand_size), MREG_R10)));
 
   // move result from RAX (div) or RDX (mod) to final destination
-  ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), Operand(select_mreg_kind(operand_size), is_mod ? MREG_RDX : MREG_RAX), generate_stack_oper(res_dest)));
+  ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), Operand(select_mreg_kind(operand_size), is_mod ? MREG_RDX : MREG_RAX), generate_stack_oper(res_dest, operand_size)));
 }
 
 // handles localaddr stack memory access
@@ -507,7 +540,7 @@ void LowLevelCodeGen::handle_localaddr(Instruction *hl_ins, std::shared_ptr<Inst
   int memory_offset = -m_total_memory_storage + vreg_space + offset.get_imm_ival(); // where local space (not vreg) starts
   // move value at memory to R10, move from R10 to destination
   ll_iseq->append(new Instruction(MINS_LEAQ, Operand(Operand::MREG64_MEM_OFF, MREG_RBP, memory_offset), Operand(select_mreg_kind(8), MREG_R10)));
-  ll_iseq->append(new Instruction(MINS_MOVQ, Operand(select_mreg_kind(8), MREG_R10), generate_stack_oper(dest)));
+  ll_iseq->append(new Instruction(MINS_MOVQ, Operand(select_mreg_kind(8), MREG_R10), generate_stack_oper(dest, 8)));
 }
 
 // handles negation insturction
@@ -520,14 +553,14 @@ void LowLevelCodeGen::handle_neg(Instruction *hl_ins, std::shared_ptr<Instructio
   if (value.get_kind() == Operand::IMM_IVAL) {
     ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size),  Operand(Operand::IMM_IVAL, value.get_imm_ival()), Operand(select_mreg_kind(operand_size), MREG_R10)));
   } else {
-    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(value), Operand(select_mreg_kind(operand_size), MREG_R10)));
+    ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size), generate_stack_oper(value, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10)));
   }
 
   // move 0 to destination
-  ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size),  Operand(Operand::IMM_IVAL, 0), generate_stack_oper(res_dest)));
+  ll_iseq->append(new Instruction(select_ll_opcode(MINS_MOVB, operand_size),  Operand(Operand::IMM_IVAL, 0), generate_stack_oper(res_dest, operand_size)));
 
   // subtract from 0 to negate
-  ll_iseq->append(new Instruction(select_ll_opcode(MINS_SUBB, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10), generate_stack_oper(res_dest)));
+  ll_iseq->append(new Instruction(select_ll_opcode(MINS_SUBB, operand_size), Operand(select_mreg_kind(operand_size), MREG_R10), generate_stack_oper(res_dest, operand_size)));
 }
 
 // handles signed size conversions
@@ -543,9 +576,9 @@ void LowLevelCodeGen::handle_sconv(Instruction *hl_ins, std::shared_ptr<Instruct
   LowLevelOpcode movs = HL_TO_LL.at(HighLevelOpcode(hl_ins->get_opcode()));
 
   // move to R10, convert in R10, move from R10 to destination
-  ll_iseq->append(new Instruction(move1, generate_stack_oper(source), Operand(Operand(select_mreg_kind(from_size), MREG_R10))));
+  ll_iseq->append(new Instruction(move1, generate_stack_oper(source, from_size), Operand(Operand(select_mreg_kind(from_size), MREG_R10))));
   ll_iseq->append(new Instruction(movs, Operand(Operand(select_mreg_kind(from_size), MREG_R10)), Operand(Operand(select_mreg_kind(to_size), MREG_R10))));
-  ll_iseq->append(new Instruction(move2, Operand(Operand(select_mreg_kind(to_size), MREG_R10)), generate_stack_oper(dest)));
+  ll_iseq->append(new Instruction(move2, Operand(Operand(select_mreg_kind(to_size), MREG_R10)), generate_stack_oper(dest, to_size)));
 }
 
 // TODO: implement other private member functions

@@ -49,6 +49,8 @@ private:
   int m_vreg = -1;
   int m_align = -1;
   bool m_address_of = false;
+  int m_mreg = -1;
+
 
   // value semantics prohibited
   Symbol(const Symbol &);
@@ -67,6 +69,8 @@ public:
   void set_func_symtab(SymbolTable *symtab);
   void set_vreg(int vreg);
   int get_vreg();
+  void set_mreg(int mreg);
+  int get_mreg();
   void set_align(int align);
   int get_align();
   void set_address_of();

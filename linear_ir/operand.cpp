@@ -104,6 +104,20 @@ Operand::Operand(Kind kind, long ival1)
   }
 }
 
+// constructor for when a vreg has a suggested MREG
+Operand::Operand(bool has_mreg, Kind kind, long ival1, int mreg_suggestion)
+  : Operand(kind) {
+  const OperandProperties &props = oprops(kind);
+  if (!props.is_non_reg()) {
+    m_basereg = int(ival1);
+  } else if (props.is_imm_ival()) {
+    m_imm_ival = ival1;
+  } else {
+    assert(false);
+  }
+  m_mreg_suggestion = mreg_suggestion;
+}
+
 // ival2 is either index_reg or imm_ival/offset (depending on operand kind)
 Operand::Operand(Kind kind, int basereg, long ival2)
   : Operand(kind) {
@@ -280,4 +294,8 @@ Operand Operand::to_memref() const {
 std::string Operand::get_label() const {
   assert(m_kind == Operand::LABEL || m_kind == Operand::IMM_LABEL);
   return m_label;
+}
+
+int Operand::get_mreg_suggestion() {
+  return m_mreg_suggestion;
 }

@@ -46,6 +46,7 @@ void LocalStorageAllocation::visit_function_definition(Node *n) {
   SymbolTable* func_table = n->get_kid(1)->get_symbol()->get_func_symtab();
   visit(n->get_kid(3)); // visit statement list
 
+  int cur_mreg = 12; // can allocate 5 local variables to use machine registers
   m_function->get_vreg_alloc()->alloc_local(); // don't allocate vr0
   int num_alloc = VREG_FIRST_ARG;
   // don't allocate argument registers
@@ -62,6 +63,9 @@ void LocalStorageAllocation::visit_function_definition(Node *n) {
       sym->set_align(m_storage_calc.add_field(sym->get_type()));
     } else {
       sym->set_vreg(m_function->get_vreg_alloc()->alloc_local());
+      if (!sym->get_type()->is_pointer() && cur_mreg <= 16) { // allocate 5 MREGS, avoid pointers
+        sym->set_mreg(cur_mreg++);
+      }
     }
   }
 

@@ -56,7 +56,7 @@ private:
   Operand get_ll_operand(Operand hl_opcode, int size, std::shared_ptr<InstructionSequence> ll_iseq);
 
   // Operand LowLevelCodeGen::generate_ll_oper(Operand oper)
-  Operand generate_stack_oper(Operand oper);
+  Operand generate_stack_oper(Operand oper, int operand_size);
   void handle_arith(Instruction *hl_ins, std::shared_ptr<InstructionSequence> ll_iseq);
   void handle_move(Instruction *hl_ins, std::shared_ptr<InstructionSequence> ll_iseq);
   void handle_comp(Instruction *hl_ins, std::shared_ptr<InstructionSequence> ll_iseq);

@@ -182,6 +182,14 @@ int Symbol::get_vreg() {
   return m_vreg;
 }
 
+void Symbol::set_mreg(int mreg) {
+  m_mreg = mreg;
+}
+
+int Symbol::get_mreg() {
+  return m_mreg;
+}
+
 void Symbol::set_align(int align) {
   m_align = align;
 }

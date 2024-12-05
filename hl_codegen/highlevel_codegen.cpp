@@ -107,9 +107,14 @@ void HighLevelCodegen::visit_function_definition(Node *n) {
 
     // source register
     Operand source = Operand(Operand::VREG, std::distance(args->cbegin(), iter) + 1);
+    Operand dest;
     
     // function param virtual register
-    Operand dest = Operand(Operand::VREG, arg->get_symbol()->get_vreg());
+    if (arg->get_symbol()->get_mreg() != -1) {
+      dest = Operand(true, Operand::VREG, arg->get_symbol()->get_vreg(), arg->get_symbol()->get_mreg());
+    } else {
+      dest = Operand(Operand::VREG, arg->get_symbol()->get_vreg());
+    }
 
     // move type
     std::shared_ptr<Type> param_type = arg->get_type();
@@ -478,7 +483,9 @@ void HighLevelCodegen::visit_array_element_ref_expression(Node *n) {
 void HighLevelCodegen::visit_variable_ref(Node *n) {
   Symbol* var = n->get_symbol();
   assert(var->get_vreg() != -1 || var->get_align() != -1);
-  if (var->get_vreg() != -1) {
+  if (var->get_mreg() != -1) {
+    n->set_operand(Operand(true, Operand::VREG, var->get_vreg(), var->get_mreg()));
+  } else if (var->get_vreg() != -1) {
     n->set_operand(Operand(Operand::VREG, var->get_vreg()));
   } else if (var->get_align() != -1) {
     int vreg = m_function->get_vreg_alloc()->alloc_local();

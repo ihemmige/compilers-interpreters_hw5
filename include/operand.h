@@ -82,6 +82,7 @@ private:
   int m_basereg, m_index_reg;
   long m_imm_ival; // also used for offset and scale
   std::string m_label;
+  int m_mreg_suggestion = -1;
 
 public:
   //! Constructor.
@@ -91,6 +92,10 @@ public:
   //! Constructor.
   //! @param ival1 either basereg or imm_ival (depending on operand Kind)
   Operand(Kind kind, long ival1);
+
+  //! Constructor.
+  //! @param ival1 either index_reg or imm_ival (depending on operand kind)
+  Operand(bool has_mreg, Kind kind, long ival1, int mreg_suggestion);
 
   //! Constructor.
   //! @param ival2 either index_reg or imm_ival (depending on operand kind)
@@ -221,6 +226,9 @@ public:
   //! Get the Operand's label.
   //! @return the label
   std::string get_label() const;
+
+  //! Get the Operand's MREG suggestion, assigned at local storage allocation
+  int get_mreg_suggestion();
 };
 
 #endif // OPERAND_H
