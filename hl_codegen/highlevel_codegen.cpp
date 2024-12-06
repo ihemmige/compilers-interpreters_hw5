@@ -109,7 +109,7 @@ void HighLevelCodegen::visit_function_definition(Node *n) {
     Operand source = Operand(Operand::VREG, std::distance(args->cbegin(), iter) + 1);
     Operand dest;
     
-    // function param virtual register
+    // function param virtual register (use MREG if allocated)
     if (arg->get_symbol()->get_mreg() != -1) {
       dest = Operand(true, Operand::VREG, arg->get_symbol()->get_vreg(), arg->get_symbol()->get_mreg());
     } else {

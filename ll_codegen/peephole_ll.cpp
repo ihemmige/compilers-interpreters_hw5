@@ -939,7 +939,7 @@ std::unique_ptr<PeepholeMatcher> matchers[] = {
     }
   ),
 
-  // Simplify 32 to 64 bit signed conversions
+  // Simplify 32 to 64 bit signed conversions (from assignment description)
   pm(
     // match instructions
     {
@@ -958,7 +958,7 @@ std::unique_ptr<PeepholeMatcher> matchers[] = {
     "BC"
   ),
 
-  // convert 2-operand imulq instruction and moves to 3-operand imulq instruction
+  // convert 2-operand imulq instruction with immediate and associated moves to 3-operand imulq instruction
   pm(
     {
       matcher( m_opcode(MINS_MOVQ),   { m_any(A), m_mreg(B) } ),
@@ -970,34 +970,6 @@ std::unique_ptr<PeepholeMatcher> matchers[] = {
       gen( g_opcode(MINS_MOVQ), { g_prev(B), g_prev(D) } ),
     }
   ),
-
-  // movslq   %r12d, %r10         /* sconv_lq vr14, vr11 */
-	// movq     %r10, -64(%rbp)
-	// imulq    $8, -64(%rbp), %r10 /* mul_q    vr15, vr14, $8 */
-	// movq     %r10, -56(%rbp)
-	// movq     -96(%rbp), %r10     /* add_q    vr16, vr10, vr15 */
-	// addq     -56(%rbp), %r10
-	// movq     %r10, -48(%rbp)
-
-  // pm(
-  //   {
-  //     matcher( m_opcode(MINS_MOVSLQ),   { m_mreg(A), m_mreg(B) } ),
-  //     matcher( m_opcode(MINS_MOVQ),   { m_mreg(B), m_any(C) } ),
-  //     matcher( m_opcode(MINS_IMULQ), { m_imm(8), m_any(C), m_mreg(B) } ),
-  //     matcher( m_opcode(MINS_MOVQ), { m_mreg(B), m_any(D) } ),
-  //     matcher( m_opcode(MINS_MOVQ), { m_any(E), m_mreg(B) } ),
-  //     matcher( m_opcode(MINS_ADDQ), { m_any(D), m_mreg(B) } ),
-  //     matcher( m_opcode(MINS_MOVQ), { m_mreg(B), m_any(F) } )
-  //   },
-
-  //   {
-  //     gen( g_opcode(MINS_MOVQ), { g_prev(E), g_prev(B) } ),
-  //     gen( g_opcode(MINS_MOVQ), { g_mreg_mem_idx(B, A, 8), g_prev(B) } ),
-  //     gen( g_opcode(MINS_MOVQ), { g_prev(B), g_prev(F) } ),
-  //   },
-  //   "",
-  //   "AB"
-  // ),
 
   // simplify logical condition checking
   pm(
@@ -1072,8 +1044,6 @@ std::unique_ptr<PeepholeMatcher> matchers[] = {
       gen( g_opcode(MINS_LEAQ), { g_prev(A), g_prev(D) } )
     }
   ),
-
-  // TODO: add your own peephole rewrite patterns!
 };
 
 #undef pm

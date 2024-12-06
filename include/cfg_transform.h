@@ -68,7 +68,7 @@ public:
 class LVN : public ControlFlowGraphTransform {
 public:
   LVN(std::shared_ptr<ControlFlowGraph> cfg);
-  virtual ~LVN();
+  ~LVN();
   virtual std::shared_ptr<InstructionSequence> transform_basic_block(std::shared_ptr<InstructionSequence> orig_bb) override;
 };
 

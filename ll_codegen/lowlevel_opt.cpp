@@ -32,13 +32,13 @@ LowLevelOpt::~LowLevelOpt() {
 void LowLevelOpt::optimize(std::shared_ptr<Function> function) {
   assert(m_options.has_option(Options::OPTIMIZE));
 
+  // convert instruction sequence to CFG
   std::shared_ptr<InstructionSequence> ll_iseq = function->get_ll_iseq();
   auto ll_cfg_builder = ::make_lowlevel_cfg_builder(ll_iseq);
   std::shared_ptr<ControlFlowGraph> ll_cfg = ll_cfg_builder.build();
 
-  // do peephole optimizationm
+  // do peephole optimization, in a loop till no instructions are matched
   bool done = false;
-
   while (!done) {
     PeepholeLowLevel peephole_ll(ll_cfg);
     ll_cfg = peephole_ll.transform_cfg();
@@ -47,6 +47,7 @@ void LowLevelOpt::optimize(std::shared_ptr<Function> function) {
       done = true;
   }
 
+  // convert CFG back to instruction sequence
   ll_iseq = ll_cfg->create_instruction_sequence();
   function->set_ll_iseq(ll_iseq);
 

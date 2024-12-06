@@ -23,9 +23,6 @@
 #include "cfg_builder.h"
 #include "cfg_transform.h"
 
-// #include <iostream>
-// using namespace std;
-
 HighLevelOpt::HighLevelOpt(const Options &options)
   : m_options(options) {
 }
@@ -40,13 +37,13 @@ void HighLevelOpt::optimize(std::shared_ptr<Function> function) {
   // the Function
   m_function = function;
 
-  // TODO: perform optimizations on the high-level InstructionSequence
-
+  // make CFG from instruction sequence
   std::shared_ptr<InstructionSequence> hl_iseq = m_function->get_hl_iseq();
   auto hl_cfg_builder = ::make_highlevel_cfg_builder(hl_iseq);
   std::shared_ptr<ControlFlowGraph> hl_cfg = hl_cfg_builder.build();
 
-  for (int i = 0; i < 2; i++) {
+  // do LVN/copy progogation/dead store elimination twice
+  for (int _ = 0; _ < 2; _++) {
     // local value numbering and copy propogation
     LVN lvn(hl_cfg);
     hl_cfg = lvn.transform_cfg();
@@ -55,9 +52,8 @@ void HighLevelOpt::optimize(std::shared_ptr<Function> function) {
     DeadStoreElimination dse(hl_cfg);
     hl_cfg = dse.transform_cfg();
   }
-  
-  /// DO OPTIMIZATIONS
 
+  // convert CFG back to instruction sequence
   hl_iseq = hl_cfg->create_instruction_sequence();
   m_function->set_hl_iseq(hl_iseq);
 

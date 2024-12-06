@@ -61,7 +61,7 @@ void LocalStorageAllocation::visit_function_definition(Node *n) {
       sym->set_align(m_storage_calc.add_field(sym->get_type()));
     } else if (sym->get_address_of()) {
       sym->set_align(m_storage_calc.add_field(sym->get_type()));
-    } else {
+    } else { // vreg (and MREG if available)
       sym->set_vreg(m_function->get_vreg_alloc()->alloc_local());
       if (!sym->get_type()->is_pointer() && cur_mreg <= 16) { // allocate 5 MREGS, avoid pointers
         sym->set_mreg(cur_mreg++);
