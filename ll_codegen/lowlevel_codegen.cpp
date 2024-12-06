@@ -298,7 +298,9 @@ void LowLevelCodeGen::translate_instruction(Instruction *hl_ins, std::shared_ptr
   // machine register operands.
   if (hl_opcode == HINS_call) {
     Operand func = hl_ins->get_operand(0);
-    ll_iseq->append(new Instruction(MINS_CALL, func));
+    Instruction* call_ins = new Instruction(MINS_CALL, func);
+    call_ins->set_symbol(m_function->get_symbol());
+    ll_iseq->append(call_ins);
     return;
   }
 

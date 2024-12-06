@@ -32,6 +32,24 @@ LowLevelOpt::~LowLevelOpt() {
 void LowLevelOpt::optimize(std::shared_ptr<Function> function) {
   assert(m_options.has_option(Options::OPTIMIZE));
 
+  std::shared_ptr<InstructionSequence> ll_iseq = function->get_ll_iseq();
+  auto ll_cfg_builder = ::make_lowlevel_cfg_builder(ll_iseq);
+  std::shared_ptr<ControlFlowGraph> ll_cfg = ll_cfg_builder.build();
+
+  // do peephole optimizationm
+  bool done = false;
+
+  while (!done) {
+    PeepholeLowLevel peephole_ll(ll_cfg);
+    ll_cfg = peephole_ll.transform_cfg();
+
+    if (peephole_ll.get_num_matched() == 0)
+      done = true;
+  }
+
+  ll_iseq = ll_cfg->create_instruction_sequence();
+  function->set_ll_iseq(ll_iseq);
+
   // Like HighLevelOpt, LowLevelOpt will be most easily implemented
   // using optimizations deriving from ControlFlowGraphTransform.
   // E.g.:

@@ -939,6 +939,140 @@ std::unique_ptr<PeepholeMatcher> matchers[] = {
     }
   ),
 
+  // Simplify 32 to 64 bit signed conversions
+  pm(
+    // match instructions
+    {
+      matcher( m_opcode(MINS_MOVL),   { m_mreg(A), m_mreg(B) } ),
+      matcher( m_opcode(MINS_MOVSLQ), { m_mreg(B), m_mreg(C) } ),
+      matcher( m_opcode(MINS_MOVQ),   { m_mreg(C), m_any(D) } ),
+    },
+
+    // rewrite
+    {
+      gen( g_opcode(MINS_MOVSLQ), { g_prev(A), g_prev(C) } ),
+      gen( g_opcode(MINS_MOVQ), { g_prev(C), g_prev(D) } ),
+    },
+
+    // Make sure B and C are dead afterwards
+    "BC"
+  ),
+
+  // convert 2-operand imulq instruction and moves to 3-operand imulq instruction
+  pm(
+    {
+      matcher( m_opcode(MINS_MOVQ),   { m_any(A), m_mreg(B) } ),
+      matcher( m_opcode(MINS_IMULQ), { m_imm_any(C), m_mreg(B) } ),
+      matcher( m_opcode(MINS_MOVQ),   { m_mreg(B), m_any(D) } ),
+    },
+    {
+      gen( g_opcode(MINS_IMULQ), { g_prev(C), g_prev(A), g_prev(B) } ),
+      gen( g_opcode(MINS_MOVQ), { g_prev(B), g_prev(D) } ),
+    }
+  ),
+
+  // movslq   %r12d, %r10         /* sconv_lq vr14, vr11 */
+	// movq     %r10, -64(%rbp)
+	// imulq    $8, -64(%rbp), %r10 /* mul_q    vr15, vr14, $8 */
+	// movq     %r10, -56(%rbp)
+	// movq     -96(%rbp), %r10     /* add_q    vr16, vr10, vr15 */
+	// addq     -56(%rbp), %r10
+	// movq     %r10, -48(%rbp)
+
+  // pm(
+  //   {
+  //     matcher( m_opcode(MINS_MOVSLQ),   { m_mreg(A), m_mreg(B) } ),
+  //     matcher( m_opcode(MINS_MOVQ),   { m_mreg(B), m_any(C) } ),
+  //     matcher( m_opcode(MINS_IMULQ), { m_imm(8), m_any(C), m_mreg(B) } ),
+  //     matcher( m_opcode(MINS_MOVQ), { m_mreg(B), m_any(D) } ),
+  //     matcher( m_opcode(MINS_MOVQ), { m_any(E), m_mreg(B) } ),
+  //     matcher( m_opcode(MINS_ADDQ), { m_any(D), m_mreg(B) } ),
+  //     matcher( m_opcode(MINS_MOVQ), { m_mreg(B), m_any(F) } )
+  //   },
+
+  //   {
+  //     gen( g_opcode(MINS_MOVQ), { g_prev(E), g_prev(B) } ),
+  //     gen( g_opcode(MINS_MOVQ), { g_mreg_mem_idx(B, A, 8), g_prev(B) } ),
+  //     gen( g_opcode(MINS_MOVQ), { g_prev(B), g_prev(F) } ),
+  //   },
+  //   "",
+  //   "AB"
+  // ),
+
+  // simplify logical condition checking
+  pm(
+    {
+      matcher( m_opcode(MINS_CMPL),   { m_any(A), m_any(B) } ),
+      matcher (m_opcode(MINS_SETL), { m_mreg(C) }),
+      matcher( m_opcode(MINS_MOVZBL), { m_mreg(C), m_mreg(D) } ),
+      matcher( m_opcode(MINS_MOVL), { m_mreg(D), m_any(E) } ),
+      matcher( m_opcode(MINS_CMPL),   { m_imm(0), m_any(E) } ),
+      matcher( m_opcode(MINS_JNE),   { m_label(F) } ),
+    },
+    {
+      gen( g_opcode(MINS_CMPL), { g_prev(A), g_prev(B) } ),
+      gen( g_opcode(MINS_JL), { g_prev(F) } ),
+    }
+  ),
+
+  // remove temporary operands for moves
+  pm(
+    {
+      matcher( m_opcode(MINS_MOVL),   { m_imm_any(A), m_any(B) } ),
+      matcher( m_opcode(MINS_MOVL),   { m_any(B), m_any(C) } ),
+    },
+    {
+      gen( g_opcode(MINS_MOVL), { g_prev(A), g_prev(C) } )
+    }
+  ),
+
+  // simplify comparison
+  pm(
+    {
+      matcher( m_opcode(MINS_MOVL),   { m_imm_any(A), m_any(B) } ),
+      matcher( m_opcode(MINS_CMPL),   { m_any(B), m_mreg(C) } ),
+    },
+    {
+      gen( g_opcode(MINS_CMPL), { g_prev(A), g_prev(C) } )
+    }
+  ),
+
+  // simplify ALU instruction and moves when registers involved
+  pm(
+    {
+      matcher( m_opcode(MINS_MOVL),   { m_mreg(A), m_mreg(B) } ),
+      matcher( m_opcode_alu_l(A),   { m_any(C), m_mreg(B) } ),
+      matcher( m_opcode(MINS_MOVL),   { m_mreg(B), m_any(D) } ),
+      matcher( m_opcode(MINS_MOVL),   { m_any(D), m_any(A) } ),
+    },
+    {
+      gen( g_opcode(A), { g_prev(C), g_prev(A) } )
+    }
+  ),
+
+  // move immediate value directly when doing ALU instruction
+  pm(
+    {
+      matcher( m_opcode(MINS_MOVL),   { m_imm_any(A), m_any(B) } ),
+      matcher( m_opcode_alu_l(A),   { m_any(B), m_mreg(C) } ),
+    },
+    {
+      gen( g_opcode(A), { g_prev(A), g_prev(C) } )
+    }
+  ),
+
+  // LEAQ directly to destination when destination is mreg
+  pm(
+    {
+      matcher( m_opcode(MINS_LEAQ),   { m_any(A), m_mreg(B) } ),
+      matcher( m_opcode(MINS_MOVQ),   { m_mreg(B), m_any(C) } ),
+      matcher( m_opcode(MINS_MOVQ),   { m_any(C), m_mreg(D) } ),
+    },
+    {
+      gen( g_opcode(MINS_LEAQ), { g_prev(A), g_prev(D) } )
+    }
+  ),
+
   // TODO: add your own peephole rewrite patterns!
 };
 
